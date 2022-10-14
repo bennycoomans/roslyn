@@ -848,7 +848,10 @@ namespace Microsoft.CodeAnalysis.CSharp
                 var sourcePlaceholder = new BoundInOperatorSourcePlaceholder(node, source.Type);
                 sourcePlaceholder.UseAsThis();
 
-                var indexOf = MakeInvocationExpression(node,
+                // Build source.IndexOf(element) >= 0
+
+                var indexOf = MakeInvocationExpression(
+                    node,
                     sourcePlaceholder,
                     "IndexOf",
                     ImmutableArray.Create<BoundExpression>(elementPlaceholder),
@@ -865,17 +868,41 @@ namespace Microsoft.CodeAnalysis.CSharp
                     new BoundLiteral(node, ConstantValue.Create(0), int32Type),
                     booleanType);
 
-                // TODO: build source.IndexOf(element) >= 0
                 return new BoundInOperator(node, element, source, elementPlaceholder, sourcePlaceholder, test, booleanType);
             }
-            else if (source.Type is ArrayTypeSymbol { IsSZArray: true, ElementType: var elementType } arrayType)
+            else if (source.Type is ArrayTypeSymbol { IsSZArray: true, ElementType: var elementType })
             {
                 if (!elementType.Equals(element.Type, TypeCompareKind.ConsiderEverything2))
                 {
                     throw new NotImplementedException();
                 }
 
-                // TODO: build System.Array.IndexOf(source, element) >= 0
+                var elementPlaceholder = new BoundInOperatorElementPlaceholder(node, element.Type);
+                var sourcePlaceholder = new BoundInOperatorSourcePlaceholder(node, source.Type);
+                sourcePlaceholder.UseAsThis();
+
+                // Build System.Array.IndexOf(source, element) >= 0
+
+                var arrayType = GetSpecialType(SpecialType.System_Array, diagnostics, node);
+                var indexOf = MakeInvocationExpression(
+                    node,
+                    new BoundTypeExpression(node, null, arrayType),
+                    "IndexOf",
+                    ImmutableArray.Create<BoundExpression>(sourcePlaceholder, elementPlaceholder),
+                    diagnostics);
+
+                var int32Type = GetSpecialType(SpecialType.System_Int32, diagnostics, node);
+
+                var test = new BoundBinaryOperator(
+                    node,
+                    BinaryOperatorKind.GreaterThanOrEqual,
+                    null,
+                    LookupResultKind.Viable,
+                    indexOf,
+                    new BoundLiteral(node, ConstantValue.Create(0), int32Type),
+                    booleanType);
+
+                return new BoundInOperator(node, element, source, elementPlaceholder, sourcePlaceholder, test, booleanType);
             }
             else
             {
